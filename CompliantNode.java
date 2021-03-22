@@ -114,8 +114,11 @@ public class CompliantNode implements Node {
                 }
             }
 
-            int distrustTreshold = (int)((_followees.size()-_maliciousNodes.size())*0.95);
-            if (_currRound > 2*_numRounds/3 && peaceBelievers > distrustTreshold) {
+            int numBelieversDistrustThreshold = (int)((_followees.size()-_maliciousNodes.size())*0.95);
+            int cycleSizeDistrustThreshold = _numRounds/2;
+            int roundsSinceSeen = _currRound - nodes.firstRoundSeen;
+            if (roundsSinceSeen >= cycleSizeDistrustThreshold
+                    || (_currRound > 2*_numRounds/3 && peaceBelievers > numBelieversDistrustThreshold)) {
                 for (int nodeId : _followees) {
                     if (_maliciousNodes.contains(nodeId)) continue;
 
