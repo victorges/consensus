@@ -65,34 +65,40 @@ public class CompliantNode implements Node {
         int[] nextFolloweeTransactions = new int[_numNodes];
         for (Candidate candidate : candidates) {
             if (!_followees.contains(candidate.sender)) continue;
-            _pendingTransactions.add(candidate.tx);
-
-            nextFolloweeTransactions[candidate.sender]++;
-
             if (_maliciousNodes.contains(candidate.sender)) continue;
 
             if (!_transactionBelievers.containsKey(candidate.tx)) {
                 _transactionBelievers.put(candidate.tx, new NodesSet(_numNodes));
             }
             _transactionBelievers.get(candidate.tx).flagNode(candidate.sender);
+            nextFolloweeTransactions[candidate.sender]++;
         }
 
         detectMaliciousNodes(nextFolloweeTransactions);
         _followeeTransactions = nextFolloweeTransactions;
 
-        candidates.clear();
-        for (Transaction tx : _pendingTransactions) {
-            if (!_transactionBelievers.containsKey(tx)) continue;
-
-            NodesSet nodes = _transactionBelievers.get(tx);
-            if (nodes.roundCount() <= 1) {
-                _transactionBelievers.remove(tx);
+        int threshold = _currRound * (_followees.size() - _maliciousNodes.size()) / _numRounds / 3;
+        for (Transaction tx : _transactionBelievers.keySet()) {
+            int count = _transactionBelievers.get(tx).roundCount();
+            if (count > 0 && count >= threshold) {
+                _pendingTransactions.add(tx);
             }
         }
+
+        candidates.clear();
     }
 
     private void detectMaliciousNodes(int[] nextFolloweeTransactions) {
         if (_currRound <= 1) return;
+
+        for (int nodeId : _followees) {
+            boolean decreasingNumberOfTxs = nextFolloweeTransactions[nodeId] < _followeeTransactions[nodeId];
+            boolean returningNoTxs = _currRound >= 3 && nextFolloweeTransactions[nodeId] == 0;
+            boolean returningOnlyOwnTxs = _currRound > _numRounds/2 && nextFolloweeTransactions[nodeId] <= 500*_p_txDistribution;
+            if (decreasingNumberOfTxs || returningNoTxs || returningOnlyOwnTxs) {
+                _maliciousNodes.add(nodeId);
+            }
+        }
 
         for (Transaction tx : _transactionBelievers.keySet()) {
             NodesSet nodes = _transactionBelievers.get(tx);
@@ -117,15 +123,6 @@ public class CompliantNode implements Node {
                         _maliciousNodes.add(nodeId);
                     }
                 }
-            }
-        }
-
-        for (int nodeId : _followees) {
-            boolean decreasingNumberOfTxs = nextFolloweeTransactions[nodeId] < _followeeTransactions[nodeId];
-            boolean returningNoTxs = _currRound >= 3 && nextFolloweeTransactions[nodeId] == 0;
-            boolean returningOnlyOwnTxs = _currRound > _numRounds/2 && nextFolloweeTransactions[nodeId] <= 500*_p_txDistribution;
-            if (decreasingNumberOfTxs || returningNoTxs || returningOnlyOwnTxs) {
-                _maliciousNodes.add(nodeId);
             }
         }
     }
