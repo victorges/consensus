@@ -15,7 +15,7 @@ public class CompliantNode implements Node {
     private int _numNodes;
     private final Set<Integer> _followees = new TreeSet<>();
 
-    private Set<Transaction> _pendingTransactions;
+    private final Set<Transaction> _pendingTransactions = new TreeSet<>(s_transactionComparator);
 
     private final Map<Transaction, NodesSet> _transactionBelievers = new TreeMap<>(s_transactionComparator);
     private final Set<Integer> _maliciousNodes = new TreeSet<>();
@@ -41,7 +41,7 @@ public class CompliantNode implements Node {
     }
 
     public void setPendingTransaction(Set<Transaction> pendingTransactions) {
-        _pendingTransactions = pendingTransactions;
+        _pendingTransactions.addAll(pendingTransactions);
     }
 
     public Set<Transaction> sendToFollowers() {
@@ -50,7 +50,7 @@ public class CompliantNode implements Node {
         }
 
         Set<Transaction> consensus = new TreeSet<>(s_transactionComparator);
-        int threshold = (int)((_followees.size()-_maliciousNodes.size())*0.7);
+        int threshold = (int)((_followees.size()-_maliciousNodes.size())*0.85);
         for (Transaction transaction : _transactionBelievers.keySet()) {
             NodesSet nodes = _transactionBelievers.get(transaction);
             if (nodes.roundCount() > threshold) {
@@ -77,7 +77,7 @@ public class CompliantNode implements Node {
         detectMaliciousNodes(nextFolloweeTransactions);
         _followeeTransactions = nextFolloweeTransactions;
 
-        int threshold = _currRound * (_followees.size() - _maliciousNodes.size()) / _numRounds / 3;
+        int threshold = (int)(_p_malicious * (_currRound / (double) _numRounds) * (_followees.size() - _maliciousNodes.size()));
         for (Transaction tx : _transactionBelievers.keySet()) {
             int count = _transactionBelievers.get(tx).roundCount();
             if (count > 0 && count >= threshold) {
@@ -114,7 +114,7 @@ public class CompliantNode implements Node {
                 }
             }
 
-            int distrustTreshold = (int)((_followees.size()-_maliciousNodes.size())*0.9);
+            int distrustTreshold = (int)((_followees.size()-_maliciousNodes.size())*0.95);
             if (_currRound > 2*_numRounds/3 && peaceBelievers > distrustTreshold) {
                 for (int nodeId : _followees) {
                     if (_maliciousNodes.contains(nodeId)) continue;
