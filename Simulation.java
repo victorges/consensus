@@ -23,14 +23,17 @@ public class Simulation {
       int numRounds = Integer.parseInt(args[3]); // number of simulation rounds your nodes will run for
 
       // pick which nodes are malicious and which are compliant
+      int numMaliciousNodes = 0;
       Node[] nodes = new Node[numNodes];
       for (int i = 0; i < numNodes; i++) {
-         if(Math.random() < p_malicious)
+         if(Math.random() < p_malicious) {
             // When you are ready to try testing with malicious nodes, replace the
             // instantiation below with an instantiation of a MaliciousNode
             nodes[i] = new MaliciousNode(p_graph, p_malicious, p_txDistribution, numRounds);
-         else
+            numMaliciousNodes++;
+         } else {
             nodes[i] = new CompliantNode(p_graph, p_malicious, p_txDistribution, numRounds);
+         }
       }
 
 
@@ -144,7 +147,7 @@ public class Simulation {
 
       long numTxs = Arrays.stream(transactions.split(";")).filter(s -> !s.equals("")).count();
       System.out.println("Consent reached:");
-      System.out.println("\tNumber of nodes: "+maxConsentSet.size());
+      System.out.println("\tNumber of nodes: "+maxConsentSet.size()+" out of "+(numNodes-numMaliciousNodes));
       System.out.println("\tNumber of transactions: "+numTxs);
       System.out.println("\tTransactions: "+transactions);
    }

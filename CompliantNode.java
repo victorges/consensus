@@ -19,8 +19,7 @@ public class CompliantNode implements Node {
     private final Set<Transaction> _consensusTransactions = new TreeSet<>(s_transactionComparator);
 
     private final Set<Integer> _maliciousNodes = new TreeSet<>();
-    private Set<Transaction>[] _followeeTransactions;
-    private Set<Transaction>[] _nextFolloweeTransactions;
+    private int[] _followeeTransactions;
 
     public CompliantNode(double p_graph, double p_malicious, double p_txDistribution, int numRounds) {
         _p_graph = p_graph;
@@ -33,13 +32,10 @@ public class CompliantNode implements Node {
         _numNodes = followees.length;
 
         _followees.clear();
-        _followeeTransactions = new Set[_numNodes];
-        _nextFolloweeTransactions = new Set[_numNodes];
+        _followeeTransactions = new int[_numNodes];
         for (int i = 0; i < _numNodes; i++) {
             if (followees[i]) {
                 _followees.add(i);
-                _followeeTransactions[i] = new TreeSet<>(s_transactionComparator);
-                _nextFolloweeTransactions[i] = new TreeSet<>(s_transactionComparator);
             }
         }
     }
@@ -65,18 +61,20 @@ public class CompliantNode implements Node {
         _pendingTransactions.forEach(tx -> believers.put(tx, 1));
         _consensusTransactions.forEach(tx -> believers.put(tx, 1));
 
+        int[] nextFolloweeTransactions = new int[_numNodes];
         for (Candidate candidate : candidates) {
             if (!_followees.contains(candidate.sender)) continue;
 
             _pendingTransactions.add(candidate.tx);
             if (_maliciousNodes.contains(candidate.sender)) continue;
 
-            _nextFolloweeTransactions[candidate.sender].add(candidate.tx);
+            nextFolloweeTransactions[candidate.sender]++;
 
             Integer count = believers.get(candidate.tx);
             believers.put(candidate.tx, count == null ? 1 : count + 1);
         }
-        detectMaliciousNodes();
+        detectMaliciousNodes(nextFolloweeTransactions, candidates);
+        _followeeTransactions = nextFolloweeTransactions;
 
         int threshold = (int)((1+_followees.size()-_maliciousNodes.size())*0.5);
         for (Transaction transaction : believers.keySet()) {
@@ -87,18 +85,15 @@ public class CompliantNode implements Node {
         }
     }
 
-    private void detectMaliciousNodes() {
+    private void detectMaliciousNodes(int[] nextFolloweeTransactions, Set<Candidate> candidates) {
         if (_currRound <= 1) return;
 
-//        for (Set<Transaction> : _nextFolloweeTransactions) {
-//            List<Transaction> nextNodeTxs = _nextFolloweeTransactions.get(nodeId);
-//            List<Transaction> currNodeTxs = _followeeTransactions.get(nodeId);
-//
-//        }
-
-        Set<Transaction>[] temp = _followeeTransactions;
-        _followeeTransactions = _nextFolloweeTransactions;
-        _nextFolloweeTransactions = temp;
-        Arrays.stream(_nextFolloweeTransactions).filter(Objects::nonNull).forEach(Set::clear);
+        for (int nodeId : _followees) {
+            boolean decreasingNumberOfTxs = nextFolloweeTransactions[nodeId] < _followeeTransactions[nodeId];
+            boolean returningNoTxs = _currRound > _numRounds/2 && _followeeTransactions[nodeId] == 0;
+            if (decreasingNumberOfTxs || returningNoTxs) {
+                _maliciousNodes.add(nodeId);
+            }
+        }
     }
 }
