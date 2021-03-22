@@ -68,7 +68,7 @@ public class CompliantNode implements Node {
             if (_maliciousNodes.contains(candidate.sender)) continue;
 
             if (!_transactionBelievers.containsKey(candidate.tx)) {
-                _transactionBelievers.put(candidate.tx, new NodesSet(_numNodes));
+                _transactionBelievers.put(candidate.tx, new NodesSet(_numNodes, _currRound));
             }
             _transactionBelievers.get(candidate.tx).flagNode(candidate.sender);
             nextFolloweeTransactions[candidate.sender]++;
@@ -94,7 +94,7 @@ public class CompliantNode implements Node {
         for (int nodeId : _followees) {
             boolean decreasingNumberOfTxs = nextFolloweeTransactions[nodeId] < _followeeTransactions[nodeId];
             boolean returningNoTxs = _currRound >= 3 && nextFolloweeTransactions[nodeId] == 0;
-            boolean returningOnlyOwnTxs = _currRound > _numRounds/2 && nextFolloweeTransactions[nodeId] <= 500*_p_txDistribution;
+            boolean returningOnlyOwnTxs = _currRound > _numRounds/2 && nextFolloweeTransactions[nodeId] <= 2*500*_p_txDistribution;
             if (decreasingNumberOfTxs || returningNoTxs || returningOnlyOwnTxs) {
                 _maliciousNodes.add(nodeId);
             }
@@ -129,12 +129,16 @@ public class CompliantNode implements Node {
 }
 
 class NodesSet {
-    public final byte[] _nodesLastRound;
+    private final byte[] _nodesLastRound;
     private byte _currRound;
     private int _currRoundCount;
 
-    public NodesSet(int numNodes) {
+    public final int firstRoundSeen;
+
+    public NodesSet(int numNodes, int round) {
         this._nodesLastRound = new byte[numNodes];
+        firstRoundSeen = round;
+        bumpRound(round);
     }
 
     public void bumpRound(int round) {
