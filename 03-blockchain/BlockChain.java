@@ -20,9 +20,13 @@ public class BlockChain {
      * block
      */
     public BlockChain(Block genesisBlock) {
-        UTXOPool genesisUTXOs = getResultingPool(new UTXOPool(), genesisBlock);
         _blockTree = new ChainHeadBlockTree(CUT_OFF_AGE);
-        _blockTree.addBlock(genesisBlock, genesisUTXOs);
+
+        UTXOPool genesisUTXOs = getResultingPool(new UTXOPool(), genesisBlock);
+        boolean added = _blockTree.addBlock(genesisBlock, genesisUTXOs);
+        if (genesisBlock == null || !added) {
+            throw new IllegalArgumentException("Bad genesis block");
+        }
     }
 
     /** Get the maximum height block */
@@ -56,14 +60,20 @@ public class BlockChain {
         if (block.getPrevBlockHash() == null) {
             return false;
         }
+
         BlockInfo parent = _blockTree.getParentBlock(block);
+        if (parent == null) {
+            return false;
+        }
         UTXOPool resultingPool = getResultingPool(parent.utxoPool, block);
         if (resultingPool == null) {
             return false;
         }
+
         if (!_blockTree.addBlock(block, resultingPool)) {
             return false;
         }
+
         for (Transaction tx : block.getTransactions()) {
             _txPool.removeTransaction(tx.getHash());
         }
@@ -134,7 +144,7 @@ class ChainHeadBlockTree {
     }
 
     public BlockInfo getMaxHeightBlock() {
-        return _sortedBlocks.first();
+        return _sortedBlocks.isEmpty() ? null : _sortedBlocks.first();
     }
 
     public long getMaxKnownHeight() {
@@ -174,13 +184,16 @@ class ChainHeadBlockTree {
     }
 
     private void cutOffOldBlocks() {
-        long cutOffHeight = getMaxKnownHeight()-_cutOffAge;
-        while (_sortedBlocks.size() > 0) {
+        // We need to remember blocks at height 1 below the new blocks cut-off
+        // height to still be able to create blocks at exactly the cutOffHeight.
+        long cutOffHeight = getMaxKnownHeight()-_cutOffAge-1;
+        while (!_sortedBlocks.isEmpty()) {
             BlockInfo leastHeight = _sortedBlocks.last();
-            if (leastHeight.height <= cutOffHeight) {
-                _sortedBlocks.remove(leastHeight);
-                _knownBlocks.remove(blockKey(leastHeight.block));
+            if (leastHeight.height > cutOffHeight) {
+                break;
             }
+            _sortedBlocks.remove(leastHeight);
+            _knownBlocks.remove(blockKey(leastHeight.block));
         }
     }
 
