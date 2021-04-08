@@ -10,7 +10,7 @@ import java.util.TreeSet;
 // as it would cause a memory overflow.
 
 public class BlockChain {
-    public static final int s_cutOffAge = 10;
+    public static final int CUT_OFF_AGE = 10;
 
     private final TransactionPool _txPool = new TransactionPool();
     private final ChainHeadBlockTree _blockTree;
@@ -21,7 +21,7 @@ public class BlockChain {
      */
     public BlockChain(Block genesisBlock) {
         UTXOPool genesisUTXOs = getResultingPool(new UTXOPool(), genesisBlock);
-        _blockTree = new ChainHeadBlockTree(s_cutOffAge);
+        _blockTree = new ChainHeadBlockTree(CUT_OFF_AGE);
         _blockTree.addBlock(genesisBlock, genesisUTXOs);
     }
 
@@ -77,13 +77,13 @@ public class BlockChain {
 
     private static UTXOPool getResultingPool(UTXOPool prevPool, Block block) {
         TxHandler handler = new TxHandler(prevPool);
-        Transaction[] txs = block.getTransactions().toArray(Transaction[]::new);
+        Transaction[] txs = block.getTransactions().toArray(new Transaction[0]);
         Transaction[] successTxs = handler.handleTxs(txs);
         if (txs.length != successTxs.length) {
             return null;
         }
 
-        var pool = handler.getUTXOPool();
+        UTXOPool pool = handler.getUTXOPool();
         if (!addCoinbaseTransaction(pool, block)) {
             return null;
         }
