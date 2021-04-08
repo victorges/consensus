@@ -13,25 +13,26 @@ public class BlockChain {
     public static final int s_cutOffAge = 10;
 
     private final TransactionPool _txPool = new TransactionPool();
+    private final ChainHeadBlockTree _blockTree;
 
     /**
      * create an empty block chain with just a genesis block. Assume {@code genesisBlock} is a valid
      * block
      */
     public BlockChain(Block genesisBlock) {
-        // IMPLEMENT THIS
+        UTXOPool genesisUTXOs = getResultingPool(new UTXOPool(), genesisBlock);
+        _blockTree = new ChainHeadBlockTree(s_cutOffAge);
+        _blockTree.addBlock(genesisBlock, genesisUTXOs);
     }
 
     /** Get the maximum height block */
     public Block getMaxHeightBlock() {
-        // IMPLEMENT THIS
-        throw new RuntimeException("not implemented");
+        return _blockTree.getMaxHeightBlock().block;
     }
 
     /** Get the UTXOPool for mining a new block on top of max height block */
     public UTXOPool getMaxHeightUTXOPool() {
-        // IMPLEMENT THIS
-        throw new RuntimeException("not implemented");
+        return _blockTree.getMaxHeightBlock().utxoPool;
     }
 
     /** Get the transaction pool to mine a new block */
@@ -55,14 +56,52 @@ public class BlockChain {
         if (block.getPrevBlockHash() == null) {
             return false;
         }
-        // IMPLEMENT THIS
-        // new TxHandler(null).handleTxs(block.getTransactions().toArray(new Transaction[0]))
-        throw new RuntimeException("not implemented");
+        BlockInfo parent = _blockTree.getParentBlock(block);
+        UTXOPool resultingPool = getResultingPool(parent.utxoPool, block);
+        if (resultingPool == null) {
+            return false;
+        }
+        if (!_blockTree.addBlock(block, resultingPool)) {
+            return false;
+        }
+        for (Transaction tx : block.getTransactions()) {
+            _txPool.removeTransaction(tx.getHash());
+        }
+        return true;
     }
 
     /** Adds a transaction to the transaction pool */
     public void addTransaction(Transaction tx) {
         _txPool.addTransaction(tx);
+    }
+
+    private static UTXOPool getResultingPool(UTXOPool prevPool, Block block) {
+        TxHandler handler = new TxHandler(prevPool);
+        Transaction[] txs = block.getTransactions().toArray(Transaction[]::new);
+        Transaction[] successTxs = handler.handleTxs(txs);
+        if (txs.length != successTxs.length) {
+            return null;
+        }
+
+        var pool = handler.getUTXOPool();
+        if (!addCoinbaseTransaction(pool, block)) {
+            return null;
+        }
+        return pool;
+    }
+
+    private static boolean addCoinbaseTransaction(UTXOPool pool, Block block) {
+        Transaction coinbase = block.getCoinbase();
+        if (!coinbase.isCoinbase() || coinbase.numInputs() > 0) {
+            return false;
+        }
+        byte[] hash = coinbase.getHash();
+        for (int i = 0; i < coinbase.numOutputs(); i++) {
+            UTXO utxo = new UTXO(hash, i);
+            Transaction.Output producedOutput = coinbase.getOutput(i);
+            pool.addUTXO(utxo, producedOutput);
+        }
+        return true;
     }
 }
 
@@ -99,7 +138,7 @@ class ChainHeadBlockTree {
     }
 
     public long getMaxKnownHeight() {
-        BlockInfo block = _sortedBlocks.first();
+        BlockInfo block = getMaxHeightBlock();
         return block == null ? 0 : block.height;
     }
 
@@ -137,10 +176,10 @@ class ChainHeadBlockTree {
     private void cutOffOldBlocks() {
         long cutOffHeight = getMaxKnownHeight()-_cutOffAge;
         while (_sortedBlocks.size() > 0) {
-            BlockInfo lowest = _sortedBlocks.last();
-            if (lowest.height <= cutOffHeight) {
-                _sortedBlocks.remove(lowest);
-                _knownBlocks.remove(blockKey(lowest.block));
+            BlockInfo leastHeight = _sortedBlocks.last();
+            if (leastHeight.height <= cutOffHeight) {
+                _sortedBlocks.remove(leastHeight);
+                _knownBlocks.remove(blockKey(leastHeight.block));
             }
         }
     }
